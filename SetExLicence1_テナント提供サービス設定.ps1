@@ -1,4 +1,5 @@
 ﻿# Office365で利用可能なライセンスを付加するモジュール
+
 ## ファイルを開く関数
 ## 利用例
 ## $LicenceCSVPath =  OpenFileDialog
@@ -8,7 +9,7 @@ function OpenFileDialog()
     Add-Type -AssemblyName System.Windows.Forms
 
     $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
-    $OpenFileDialog.InitialDirectory = "c:\"
+    $OpenFileDialog.InitialDirectory = "."
     $OpenFileDialog.filter = "CSV files (*.csv)| *.csv"
     $OpenFileDialog.Title = "CSVファイルを選択してください" 
     $ret = $OpenFileDialog.ShowDialog() 
@@ -59,8 +60,8 @@ foreach($sku in $SKUList)
     foreach($serviceObj in $sku.ServiceStatus)
     {
         $array_outputrow = New-Object System.Collections.ArrayList
-        $array_outputrow.AddRange(@($sku.AccountSkuId, $serviceObj.ServicePlan.ServiceName, $serviceObj.ServicePlan.TargetClass, $serviceObj.ServicePlan.ServiceType) )
-        $array_outputspled.Add($array_outputrow)
+        $array_outputrow.AddRange(@($sku.AccountSkuId, $serviceObj.ServicePlan.ServiceName, $serviceObj.ServicePlan.TargetClass, $serviceObj.ServicePlan.ServiceType) ) > $null
+        $array_outputspled.Add($array_outputrow) > $null
     }
 }
 
@@ -103,7 +104,7 @@ foreach($adLicence in $newLicencearray)
     }
     else 
     {
-        $disableLicenceHash.Add($adLicence[0], $adLicence[1])
+        $disableLicenceHash.Add($adLicence[0], $adLicence[1]) > $null
     }
 }
 
