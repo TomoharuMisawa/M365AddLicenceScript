@@ -163,7 +163,7 @@ foreach ($key in $disableLicenceHash.Keys){
 
     # 待機
     Write-Host "＊＊＊　反映まで60秒お待ちください　＊＊＊"
-    Start-Sleep -s 60
+    Start-Sleep -s 1
 
 
     #結果を取得
