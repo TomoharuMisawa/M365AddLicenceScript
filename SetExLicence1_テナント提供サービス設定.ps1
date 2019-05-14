@@ -20,13 +20,13 @@ function OpenFileDialog()
 }
 
 
-#Install-Module -Name MSOnline
-#Import-Module MSOnline
+Install-Module -Name MSOnline
+Import-Module MSOnline
 
 
 Try 
 {
-#    Connect-MsolService -ErrorAction Stop
+    Connect-MsolService -ErrorAction Stop
 } 
 Catch 
 {
@@ -35,20 +35,19 @@ Catch
 
 
 # SetExLicence1_テナント提供サービス一覧取得のファイルを読み込み
-
 Write-Host "＊＊＊　ユーザーへライセンスを付与または変更します　＊＊＊"
 Write-Host "＊＊＊　設定するライセンス情報一覧ファイル（CSV）を選択してください　＊＊＊"
 
 #入力ファイル
-#$LicenceCSVPath =  OpenFileDialog
-$Licencearray = @(Import-CSV $LicenceCSVPath)
+$LicenceCSVPath =  OpenFileDialog
+$Licencearray = @(Import-CSV $LicenceCSVPath -Header("AccountSkuId", "ServiceName", "TargetClass", "ServiceType"))
 
 
 
 Write-Host "＊＊＊　設定するユーザー情報一覧ファイル（CSV）を選択してください　＊＊＊"
 
 #入力ファイル
-#$CSVPath =  OpenFileDialog
+$CSVPath =  OpenFileDialog
 
 # サービス一覧を突き合わせ、読んだファイルに無いサービスの一覧を作って保持（除外サービスの確定）
 # サービスを全取得
@@ -69,21 +68,19 @@ foreach($sku in $SKUList)
 }
 
 # サービス一覧から削除するものを抽出
-#for($i = 0; $i -lt $array_outputspled.Count; $i++)
 foreach($disablecheck in $array_outputspled)
 {
 
     # 5つ目の入れもの(利用か除外か)をつくる
     $disablecheck.Add($false) > $null
 
-    #foreach($disablecheck in $Licencearray)
     for($i = 0; $i -lt $Licencearray.Count; $i++)
     {
-
-        if(($disablecheck[0] -eq $Licencearray[$i].AccountSkuId) -and
-        ($disablecheck[1] -eq $Licencearray[$i].ServiceName) -and
-        ($disablecheck[2] -eq $Licencearray[$i].TargetClass) -and
-        ($disablecheck[3] -eq $Licencearray[$i].ServiceType) )
+    # TODOうまくいかない。（@()でInportを囲った所為か、、、
+        if(($disablecheck[0] -eq $Licencearray[$i][0].AccountSkuId) -and
+        ($disablecheck[1] -eq $Licencearray[$i][0].ServiceName) -and
+        ($disablecheck[2] -eq $Licencearray[$i][0].TargetClass) -and
+        ($disablecheck[3] -eq $Licencearray[$i][0].ServiceType) )
         {
             $disablecheck[4] = $true
             break
@@ -94,7 +91,7 @@ foreach($disablecheck in $array_outputspled)
 #再生成
 $newLicencearray = $array_outputspled -ne $null
 #ライセンスのカスタマイズ(OFFにするライセンス一覧を作る）
-Write-Host $newLicencearray
+#Write-Host $newLicencearray
 $disableLicenceHash = New-Object "System.Collections.Generic.Dictionary[string, string]"
 
 # 全ライセンス情報をまわして確認
@@ -164,7 +161,13 @@ foreach($al in $SKUList)
 # ライセンスの適用
 foreach ($key in $disableLicenceHash.Keys){
     $LicenseString = $key.ToString()
-    $disableOption = New-MsolLicenseOptions -AccountSkuId $LicenseString -DisabledPlans $disableLicenceHash[$key]
+    # 無効化するオプションを決定する
+    $disableplans = @()
+    if($disableLicenceHash[$key].Length -gt 0)
+    {
+        $disableplans = $disableLicenceHash[$key].split(",").Trim()
+    }
+    $disableOption = New-MsolLicenseOptions -AccountSkuId $LicenseString -DisabledPlans $disableplans
 
     #固定の設定値
     $UsageLocation = "JP" #ユーザーの地域
@@ -174,30 +177,36 @@ foreach ($key in $disableLicenceHash.Keys){
     $TranscriptPath =  [System.IO.Path]::GetDirectoryName($CSVPath)+"\$date-log-userLicense.txt"
 
     #######################################
-    write "ユーザーへライセンスを付与または変更します"
+    write "ユーザーへ以下ライセンスを付与または変更します"
+    write $LicenseString
+    write "除外機能：" 
+    write $disableOption.DisabledServicePlans
     #######################################
 
     @(Import-CSV $CSVPath) | % {
 
     $UserLicense = Get-MsolUser -UserPrincipalName　$_.UserPrincipalName;
-    
-    # ライセンスがついているか確認無ければ新規ユーザーとする
+    Write $_.UserPrincipalName; 
+
+    # ライセンスが付与されているか確認。無ければ新規ユーザーとする。
     $uselicense = $false
     foreach($li in $UserLicense.Licenses)
     {
         if($li.AccountSkuId -eq $LicenseString)
         {
             $uselicense = $true
+            $li = $null
             break
         }
+        $li = $null
     }
 
+    # ライセンスが付与されていない場合はsageLocationをJPにしてAddLicensesを実施する。
     if(-not $uselicense)
     {
         
-        #新規ユーザーの場合       
-        Write-Host $_.UserPrincipalName;
-        Write-Host "新規ユーザー";
+        #新規ライセンスの場合
+        Write "新規ライセンス付与";
 
         #ロケーション設定
         Set-MsolUser `
@@ -205,47 +214,19 @@ foreach ($key in $disableLicenceHash.Keys){
             -UsageLocation $UsageLocation;
     
         #ライセンス付与        
-        write-host $LicenseString
+        Set-MsolUserLicense `
+            -UserPrincipalName $_.UserPrincipalName `
+            -AddLicenses $LicenseString `
+            -LicenseOptions $disableOption;
 
-        if($disableLicenceHash[$key].Length -eq 0)
-        {
-            $disableplan = @()
-            $x = New-MsolLicenseOptions -AccountSkuId $LicenseString -DisabledPlans $disableplan
-            Set-MsolUserLicense `
-                -UserPrincipalName $_.UserPrincipalName `
-                -AddLicenses $LicenseString `
-                -LicenseOptions $x;
-        }
-        else
-        {
-            Set-MsolUserLicense `
-                -UserPrincipalName $_.UserPrincipalName `
-                -AddLicenses $LicenseString `
-                -LicenseOptions $disableOption;
-        }
     }else{
-    #既存ユーザーの場合
-        Write-Host $_.UserPrincipalName; 
-        
-        Write-Host "既存ユーザー";
+    #既存ライセンスの場合
+        Write "既存ライセンスの変更";
 
        #ライセンスオプション変更
-        write-host $LicenseString
-
-        if($disableLicenceHash[$key].Length -eq 0)
-        {
-            $disableplan = @()
-            $x = New-MsolLicenseOptions -AccountSkuId $LicenseString -DisabledPlans $disableplan
-            Set-MsolUserlicense `
-                -UserPrincipalName $_.UserPrincipalName `
-                -LicenseOptions $x;
-        }
-        else
-        {
-            Set-MsolUserlicense `
-                -UserPrincipalName $_.UserPrincipalName `
-                -LicenseOptions $disableOption;
-        }
+        Set-MsolUserlicense `
+            -UserPrincipalName $_.UserPrincipalName `
+            -LicenseOptions $disableOption;
 
     }
 }
