@@ -40,7 +40,7 @@ Write-Host "＊＊＊　設定するライセンス情報一覧ファイル（CS
 
 #入力ファイル
 $LicenceCSVPath =  OpenFileDialog
-$Licencearray = @(Import-CSV $LicenceCSVPath -Header("AccountSkuId", "ServiceName", "TargetClass", "ServiceType"))
+$Licencearray = @(Import-CSV $LicenceCSVPath -Header("[AccountSkuId]", "[ServiceName]", "[TargetClass]", "[ServiceType]"))
 
 
 
@@ -74,24 +74,26 @@ foreach($disablecheck in $array_outputspled)
     # 5つ目の入れもの(利用か除外か)をつくる
     $disablecheck.Add($false) > $null
 
-    for($i = 0; $i -lt $Licencearray.Count; $i++)
+    #for($i = 0; $i -lt $Licencearray.Count; $i++)
+    $i = 0
+    foreach($lic in $Licencearray)
     {
-    # TODOうまくいかない。（@()でInportを囲った所為か、、、
-        if(($disablecheck[0] -eq $Licencearray[$i][0].AccountSkuId) -and
-        ($disablecheck[1] -eq $Licencearray[$i][0].ServiceName) -and
-        ($disablecheck[2] -eq $Licencearray[$i][0].TargetClass) -and
-        ($disablecheck[3] -eq $Licencearray[$i][0].ServiceType) )
+        if(($disablecheck[0] -eq $Lic."[AccountSkuId]") -and
+        ($disablecheck[1] -eq $Lic."[ServiceName]") -and
+        ($disablecheck[2] -eq $Lic."[TargetClass]") -and
+        ($disablecheck[3] -eq $Lic."[ServiceType]") )
         {
             $disablecheck[4] = $true
+            $i++
             break
         }
+        $i++
     }
     $disablecheck = $null
 }
 #再生成
 $newLicencearray = $array_outputspled -ne $null
 #ライセンスのカスタマイズ(OFFにするライセンス一覧を作る）
-#Write-Host $newLicencearray
 $disableLicenceHash = New-Object "System.Collections.Generic.Dictionary[string, string]"
 
 # 全ライセンス情報をまわして確認
@@ -159,7 +161,8 @@ foreach($al in $SKUList)
 }
 
 # ライセンスの適用
-foreach ($key in $disableLicenceHash.Keys){
+foreach ($key in $disableLicenceHash.Keys)
+{
     $LicenseString = $key.ToString()
     # 無効化するオプションを決定する
     $disableplans = @()
@@ -185,60 +188,62 @@ foreach ($key in $disableLicenceHash.Keys){
 
     @(Import-CSV $CSVPath) | % {
 
-    $UserLicense = Get-MsolUser -UserPrincipalName　$_.UserPrincipalName;
-    Write $_.UserPrincipalName; 
+        $UserLicense = Get-MsolUser -UserPrincipalName　$_.UserPrincipalName;
+        Write $_.UserPrincipalName; 
 
-    # ライセンスが付与されているか確認。無ければ新規ユーザーとする。
-    $uselicense = $false
-    foreach($li in $UserLicense.Licenses)
-    {
-        if($li.AccountSkuId -eq $LicenseString)
+        # ライセンスが付与されているか確認。無ければ新規ユーザーとする。
+        $uselicense = $false
+        foreach($li in $UserLicense.Licenses)
         {
-            $uselicense = $true
+            if($li.AccountSkuId -eq $LicenseString)
+            {
+                $uselicense = $true
+                $li = $null
+                break
+            }
             $li = $null
-            break
         }
-        $li = $null
-    }
 
-    # ライセンスが付与されていない場合はsageLocationをJPにしてAddLicensesを実施する。
-    if(-not $uselicense)
-    {
+        # ライセンスが付与されていない場合はsageLocationをJPにしてAddLicensesを実施する。
+        if(-not $uselicense)
+        {
         
-        #新規ライセンスの場合
-        Write "新規ライセンス付与";
+            #新規ライセンスの場合
+            Write "新規ライセンス付与";
 
-        #ロケーション設定
-        Set-MsolUser `
-            -UserPrincipalName $_.UserPrincipalName `
-            -UsageLocation $UsageLocation;
+            #ロケーション設定
+            Set-MsolUser `
+                -UserPrincipalName $_.UserPrincipalName `
+                -UsageLocation $UsageLocation;
     
-        #ライセンス付与        
-        Set-MsolUserLicense `
-            -UserPrincipalName $_.UserPrincipalName `
-            -AddLicenses $LicenseString `
-            -LicenseOptions $disableOption;
+            #ライセンス付与        
+            Set-MsolUserLicense `
+                -UserPrincipalName $_.UserPrincipalName `
+                -AddLicenses $LicenseString `
+                -LicenseOptions $disableOption;
 
-    }else{
-    #既存ライセンスの場合
-        Write "既存ライセンスの変更";
+        }
+        else
+        {
+        #既存ライセンスの場合
+            Write "既存ライセンスの変更";
 
-       #ライセンスオプション変更
-        Set-MsolUserlicense `
-            -UserPrincipalName $_.UserPrincipalName `
-            -LicenseOptions $disableOption;
+           #ライセンスオプション変更
+            Set-MsolUserlicense `
+                -UserPrincipalName $_.UserPrincipalName `
+                -LicenseOptions $disableOption;
 
+        }
     }
-}
 
 
-# 待機
-Write-Host "＊＊＊　反映まで60秒お待ちください　＊＊＊"
-Start-Sleep -s 1
+    # 待機
+    Write-Host "＊＊＊　反映まで60秒お待ちください　＊＊＊"
+    Start-Sleep -s 60
 
 
-#結果を取得
-Write-Host "＊＊＊　ライセンスのログを出力中　＊＊＊"
+    #結果を取得
+    Write-Host "＊＊＊　ライセンスのログを出力中　＊＊＊"
 
     $skuList = @();
     @(Import-CSV $CSVPath) | % {
